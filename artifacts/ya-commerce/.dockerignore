@@ -1,12 +1,12 @@
 # Dependencies
 node_modules
 
-# Build output (will be regenerated)
+# Build output (will be regenerated in Docker)
 dist
+server/dist
 
 # Development files
 *.log
-*.md
 .git
 .gitignore
 .env
@@ -27,14 +27,12 @@ dist
 __tests__
 coverage
 
-# Netlify functions (not needed for AWS App Runner static deployment)
-# Note: If using AWS Lambda for functions, deploy them separately
-netlify.toml
-
-# Documentation
+# Documentation (keep README for reference)
 docs
-*.md
 LICENSE
+
+# Supabase migrations (already applied)
+supabase-migrations
 
 # Misc
 .DS_Store

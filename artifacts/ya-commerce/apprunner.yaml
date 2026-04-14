@@ -1,10 +1,9 @@
 version: 1.0
 
 # AWS App Runner configuration for YA Commerce
-# This config is used when deploying via source repository (not ECR)
-# For ECR deployment, use the Dockerfile directly
+# Unified deployment: Express server serves both API and static frontend
 
-runtime: nodejs18
+runtime: nodejs20
 
 build:
   commands:
@@ -12,21 +11,36 @@ build:
       - echo "Node version:" && node --version
       - echo "NPM version:" && npm --version
       - echo "Installing dependencies..."
-      - npm ci
+      - npm install
     build:
-      - echo "Building application..."
+      - echo "Building client and server..."
       - npm run build
     post-build:
       - echo "Build completed"
       - ls -la dist/
+      - ls -la server/dist/
 
 run:
-  runtime-version: 18
-  # Using npx serve for static file serving with SPA support
-  command: npx serve -s dist -l $PORT
+  runtime-version: 20
+  command: node server/dist/index.js
   network:
     port: 8080
     env: PORT
   env:
     - name: NODE_ENV
       value: production
+    # Server-side environment variables (set these in AWS App Runner console)
+    # - name: SUPABASE_URL
+    #   value: "your-supabase-url"
+    # - name: SUPABASE_SERVICE_ROLE_KEY
+    #   value: "your-service-role-key"
+    # - name: RAZORPAY_KEY_ID
+    #   value: "your-razorpay-key-id"
+    # - name: RAZORPAY_KEY_SECRET
+    #   value: "your-razorpay-key-secret"
+    # - name: BREVO_API_KEY
+    #   value: "your-brevo-api-key"
+    # - name: GOOGLE_CLIENT_ID
+    #   value: "your-google-client-id"
+    # - name: GOOGLE_CLIENT_SECRET
+    #   value: "your-google-client-secret"

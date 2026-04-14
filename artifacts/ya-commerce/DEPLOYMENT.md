@@ -1,217 +1,129 @@
-# YA Commerce - Deployment Guide
+# YA Commerce - AWS App Runner Deployment Guide
 
-## 📦 Production-Ready E-Commerce Store
+## Overview
 
-Complete e-commerce platform with React + Vite frontend, Supabase backend, and serverless functions for auth & payments.
+This is a unified deployment with Express.js serving both the API backend and the React frontend. AWS App Runner handles auto-scaling, SSL, and CI/CD.
 
 ---
 
-## 🚀 Quick Start
+## Prerequisites
 
-### Prerequisites
-- Node.js 18+
-- Supabase account
+- AWS Account with App Runner access
+- Docker installed (for local testing)
+- Supabase account with database set up
 - Razorpay account
-- Brevo (SendinBlue) account for emails
-- Meta Business account for WhatsApp
+- Brevo account for emails
 - Google Cloud account for OAuth (optional)
 
 ---
 
-## 📝 Environment Setup
+## Environment Variables
 
-### 1. Copy Environment Variables
+### Build-time Variables (VITE_ prefix)
+These are bundled into the frontend JavaScript at build time:
+- `VITE_SUPABASE_URL` - Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` - Supabase anon/public key
+- `VITE_RAZORPAY_KEY_ID` - Razorpay key ID (public)
 
-```bash
-cp .env.example .env
-```
-
-### 2. Fill in Environment Variables
-
-#### Supabase
-1. Create project at [supabase.com](https://supabase.com)
-2. Go to Settings > API
-3. Copy:
-   - `VITE_SUPABASE_URL` - Project URL
-   - `VITE_SUPABASE_ANON_KEY` - anon public key
-   - `SUPABASE_SERVICE_ROLE_KEY` - service_role secret key
-
-#### Run Migration
-Run the SQL migration in Supabase SQL Editor:
-```bash
-cat supabase-migrations/001_temp_otps.sql
-```
-Paste and execute in your Supabase project.
-
-#### Brevo (Email)
-1. Sign up at [brevo.com](https://www.brevo.com)
-2. Go to SMTP & API > API Keys
-3. Create new API key
-4. Set:
-   - `BREVO_API_KEY`
-   - `BREVO_SENDER_EMAIL` (verified sender)
-   - `BREVO_SENDER_NAME`
-
-#### Meta WhatsApp
-1. Go to [Meta Business Suite](https://business.facebook.com)
-2. Set up WhatsApp Business API
-3. Get:
-   - `META_WHATSAPP_PHONE_NUMBER_ID`
-   - `META_WHATSAPP_ACCESS_TOKEN`
-   - `META_WHATSAPP_VERIFY_TOKEN`
-4. Create WhatsApp template named `otp_message` with body: `Your YA Commerce login code is: {{1}}`
-
-#### Razorpay
-1. Sign up at [razorpay.com](https://razorpay.com)
-2. Go to Settings > API Keys
-3. Generate keys:
-   - `RAZORPAY_KEY_ID`
-   - `RAZORPAY_KEY_SECRET`
-   - `VITE_RAZORPAY_KEY_ID` (same as KEY_ID, for frontend)
-
-#### Google OAuth (Optional)
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create OAuth 2.0 credentials
-3. Add authorized redirect URI: `https://your-domain.com/api/auth/google/callback`
-4. Set:
-   - `GOOGLE_CLIENT_ID`
-   - `GOOGLE_CLIENT_SECRET`
+### Runtime Variables
+These are used by the Express server at runtime:
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key (secret)
+- `RAZORPAY_KEY_ID` - Razorpay key ID
+- `RAZORPAY_KEY_SECRET` - Razorpay secret key
+- `BREVO_API_KEY` - Brevo API key
+- `BREVO_SENDER_EMAIL` - Verified sender email
+- `BREVO_SENDER_NAME` - Sender display name
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth secret
+- `APP_URL` - Your app's public URL (for OAuth redirects)
+- `PORT` - Server port (App Runner sets this to 8080)
 
 ---
 
-## 🏗️ AWS App Runner Deployment (Recommended)
+## Deployment Options
 
-### Why App Runner?
-- This is NOT a static site - it needs serverless functions
-- App Runner handles both frontend + functions
-- Auto-scaling, SSL, CI/CD built-in
+### Option 1: ECR + App Runner (Recommended)
 
-### Steps
-
-1. **Build Docker Image** (or use App Runner source deployment)
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "run", "serve"]
+#### Step 1: Create ECR Repository
+```bash
+aws ecr create-repository --repository-name ya-commerce --region us-east-1
 ```
 
-2. **Push to AWS App Runner**
-
-Option A: Source Code Deployment
-- Connect GitHub repository
-- App Runner auto-detects `apprunner.yaml`
-- Configure environment variables in console
-
-Option B: Docker/ECR Deployment (Recommended)
+#### Step 2: Build Docker Image
 ```bash
-# 1. Create ECR repository (one-time)
-aws ecr create-repository --repository-name ya-commerce --region us-east-1
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
 
-# 2. Get ECR login
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
-
-# 3. Build with build args for environment variables
+# Build with build-time env vars
 docker build \
-  --build-arg VITE_SUPABASE_URL="your-supabase-url" \
+  --build-arg VITE_SUPABASE_URL="https://your-project.supabase.co" \
   --build-arg VITE_SUPABASE_ANON_KEY="your-anon-key" \
-  --build-arg VITE_RAZORPAY_KEY_ID="your-razorpay-key" \
+  --build-arg VITE_RAZORPAY_KEY_ID="rzp_live_xxx" \
   -t ya-commerce .
+```
 
-# 4. Tag and push
+#### Step 3: Push to ECR
+```bash
 docker tag ya-commerce:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/ya-commerce:latest
 docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/ya-commerce:latest
-
-# 5. Create App Runner service from ECR image in AWS Console or CLI
 ```
 
-**Important:** The frontend environment variables (VITE_* prefix) need to be passed at build time since they get bundled into the JavaScript. Runtime-only env vars should use the non-VITE prefix.
+#### Step 4: Create App Runner Service
+In AWS Console:
+1. Go to AWS App Runner
+2. Create Service > Container Registry > Amazon ECR
+3. Select your image
+4. Configure:
+   - Port: 8080
+   - CPU: 1 vCPU (adjust as needed)
+   - Memory: 2 GB (adjust as needed)
+5. Add Runtime Environment Variables (all the non-VITE ones)
+6. Deploy
 
-3. **Create App Runner Service**
-```bash
-aws apprunner create-service \
-  --service-name ya-commerce \
-  --source-configuration file://apprunner-config.json
-```
+### Option 2: Source Code Deployment
 
-4. **Configure Environment Variables**
-Add all variables from `.env.example` in App Runner console
+App Runner can build from GitHub directly using `apprunner.yaml`:
 
-5. **Custom Domain** (Optional)
-- Add custom domain in App Runner console
-- Update DNS records as instructed
+1. Connect your GitHub repository
+2. App Runner will use `apprunner.yaml` configuration
+3. Set build-time env vars in App Runner build settings
+4. Set runtime env vars in App Runner service settings
 
 ---
 
-## 🌐 Netlify Deployment (Alternative)
-
-### Steps
-
-1. **Connect Repository**
-```bash
-netlify init
-```
-
-2. **Configure Build**
-- Build command: `npm run build`
-- Publish directory: `dist`
-- Functions directory: `netlify/functions`
-
-3. **Set Environment Variables**
-```bash
-netlify env:set VITE_SUPABASE_URL "your-url"
-netlify env:set VITE_SUPABASE_ANON_KEY "your-key"
-# ... add all variables
-```
-
-4. **Deploy**
-```bash
-netlify deploy --prod
-```
-
----
-
-## 🔧 Local Development
+## Local Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Start dev server
+# Run both client and server in dev mode
 npm run dev
 
 # Build for production
 npm run build
 
-# Preview production build
-npm run serve
+# Start production server
+npm start
 ```
-
-### Testing Serverless Functions Locally
-
-Install Netlify CLI:
-```bash
-npm install -g netlify-cli
-netlify dev
-```
-
-Functions will be available at `http://localhost:8888/.netlify/functions/`
 
 ---
 
-## 📚 API Endpoints
+## API Endpoints
+
+All API endpoints are served from the Express server under `/api`:
 
 ### Authentication
+- `GET /api/healthz` - Health check
+- `GET /api/auth/google/url` - Get Google OAuth URL
+- `GET /api/auth/google/callback` - Google OAuth callback
+- `POST /api/auth/google/callback` - Google OAuth (frontend handling)
 - `POST /api/auth/email/send-otp` - Send email OTP
 - `POST /api/auth/email/verify-otp` - Verify email OTP
-- `POST /api/auth/phone/send-otp` - Send phone OTP (WhatsApp)
+- `POST /api/auth/phone/send-otp` - Send phone OTP
 - `POST /api/auth/phone/verify-otp` - Verify phone OTP
-- `GET /api/auth/google/callback` - Google OAuth callback
 
 ### Payments
 - `POST /api/payment/create-order` - Create Razorpay order
@@ -219,124 +131,95 @@ Functions will be available at `http://localhost:8888/.netlify/functions/`
 
 ### Orders
 - `POST /api/order/create` - Create new order
+- `GET /api/order/:id` - Get order details
+
+### Store
+- `GET /api/store/settings` - Get store settings
 
 ---
 
-## 🔒 Security Checklist
+## Database Schema
 
-- [x] Environment variables not in code
-- [x] Supabase RLS policies enabled
-- [x] Rate limiting on OTP endpoints
-- [x] OTP expiry (5 minutes)
-- [x] Payment signature verification
-- [x] Phone verification required for orders
-- [x] HTTPS only in production
-- [x] CORS properly configured
-- [x] Input validation on all endpoints
-
----
-
-## 📊 Database Schema
-
-The complete Supabase schema is provided in the attached SQL file.
-Key tables:
+The app uses Supabase with the following key tables:
 - `customers` - User profiles
 - `products`, `product_variants` - Product catalog
 - `orders`, `order_items` - Order management
-- `shipments`, `shipment_tracking_events` - Shipping & tracking
-- `returns` - Return management
-- `product_reviews` - Product reviews
-- `support_tickets` - Customer support
+- `payments` - Payment records
+- `order_events` - Order history/timeline
 - `temp_otp` - Temporary OTP storage
+- `store_settings` - Store configuration
+
+Run the SQL migrations in `supabase-migrations/` in your Supabase SQL Editor.
 
 ---
 
-## 🎨 Features Implemented
+## Health Check
 
-### Customer Features
-- ✅ Multi-method authentication (Email OTP, Phone OTP, Google)
-- ✅ Product browsing with filters and search
-- ✅ Shopping cart with persistence
-- ✅ Guest & registered checkout
-- ✅ Multiple payment options (Razorpay, COD)
-- ✅ Order tracking with real-time updates
-- ✅ Product reviews with media upload
-- ✅ Returns & refunds
-- ✅ Support tickets with attachments
-- ✅ Wishlist
-- ✅ Multiple addresses
-- ✅ Order history
-
-### Technical Features
-- ✅ React + TypeScript + Vite
-- ✅ Tailwind CSS + shadcn/ui
-- ✅ Supabase (PostgreSQL + Auth + Storage)
-- ✅ Serverless functions (Netlify/AWS)
-- ✅ Real-time inventory management
-- ✅ Media upload to S3 via presigned URLs
-- ✅ Email notifications (Brevo)
-- ✅ WhatsApp notifications (Meta)
-- ✅ Payment gateway integration (Razorpay)
-- ✅ SEO optimized
-- ✅ Mobile responsive
-- ✅ Production-ready
+App Runner uses the health check endpoint:
+```
+GET /api/healthz
+```
+Returns: `{ "status": "ok", "timestamp": "..." }`
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Functions Not Working
-1. Check environment variables are set
-2. Verify Netlify/App Runner configuration
-3. Check function logs in console
-4. Ensure CORS headers are correct
+### Container not starting
+- Check PORT is set to 8080
+- Verify all required env vars are set
+- Check App Runner logs for errors
 
-### OTP Not Sending
-1. Verify Brevo/WhatsApp API keys
-2. Check sender email is verified in Brevo
-3. Verify WhatsApp template is approved
-4. Check rate limits
+### OTP not sending
+- Verify BREVO_API_KEY is correct
+- Check sender email is verified in Brevo
+- Check App Runner logs for API errors
 
-### Payment Failing
-1. Verify Razorpay keys (test vs live)
-2. Check signature verification
-3. Ensure webhook URL is configured
-4. Check Razorpay dashboard for errors
+### Payment failing
+- Verify Razorpay keys (test vs live mode)
+- Check signature verification in logs
+- Ensure orderId matches
 
-### Images Not Uploading
-1. Verify S3 presign server is running: https://aykqayvu7k.us-east-1.awsapprunner.com
-2. Check CORS policy on S3 bucket
-3. Verify file size limits
-4. Check network errors in browser console
+### OAuth not working
+- Verify Google OAuth credentials
+- Check redirect URI matches: `https://your-domain/api/auth/google/callback`
+- Ensure APP_URL is set correctly
 
 ---
 
-## 📞 Support
+## Security Notes
 
-For issues or questions:
-1. Check [Supabase Docs](https://supabase.com/docs)
-2. Check [Netlify Docs](https://docs.netlify.com)
-3. Check [AWS App Runner Docs](https://docs.aws.amazon.com/apprunner/)
-
----
-
-## 📄 License
-
-Proprietary - YA Commerce © 2025
+- All sensitive keys are runtime environment variables
+- SUPABASE_SERVICE_ROLE_KEY never exposed to client
+- CORS enabled for API routes
+- Payment signatures verified server-side
+- OTPs expire after 5 minutes
+- Rate limiting should be configured in App Runner
 
 ---
 
-## 🎯 Next Steps After Deployment
+## Architecture
 
-1. ✅ Test all auth methods
-2. ✅ Test payment flow end-to-end
-3. ✅ Add products via Supabase
-4. ✅ Configure shipping zones & methods
-5. ✅ Set up email templates
-6. ✅ Configure WhatsApp templates
-7. ✅ Test order fulfillment workflow
-8. ✅ Enable Google Analytics (optional)
-9. ✅ Set up monitoring & alerts
-10. ✅ Perform security audit
+```
+┌─────────────────────────────────────────────────┐
+│              AWS App Runner                      │
+│  ┌─────────────────────────────────────────┐   │
+│  │         Express.js Server               │   │
+│  │  ┌─────────────┐  ┌─────────────────┐   │   │
+│  │  │  API Routes │  │  Static Files   │   │   │
+│  │  │  /api/*     │  │  React SPA      │   │   │
+│  │  └──────┬──────┘  └────────────────┘   │   │
+│  └─────────┼───────────────────────────────┘   │
+│            │                                    │
+└────────────┼────────────────────────────────────┘
+             │
+             ▼
+    ┌────────────────┐    ┌──────────────┐
+    │   Supabase     │    │  Razorpay    │
+    │  (PostgreSQL)  │    │  (Payments)  │
+    └────────────────┘    └──────────────┘
+```
 
-**Your YA Commerce store is now production-ready! 🎉**
+---
+
+**Your YA Commerce store is ready for production on AWS App Runner!**
