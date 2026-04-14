@@ -1,5 +1,4 @@
 import { Handler } from '@netlify/functions';
-import crypto from 'crypto';
 import { successResponse, errorResponse } from './utils';
 
 const handler: Handler = async (event) => {

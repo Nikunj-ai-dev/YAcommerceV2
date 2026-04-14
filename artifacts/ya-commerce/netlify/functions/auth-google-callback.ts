@@ -19,7 +19,7 @@ const handler: Handler = async (event) => {
     }
 
     const supabase = createClient(
-      process.env.VITE_SUPABASE_URL!,
+      process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
@@ -81,10 +81,11 @@ const handler: Handler = async (event) => {
     }
 
     // Redirect to homepage with success
+    const appUrl = process.env.APP_URL || process.env.URL || 'http://localhost:3000';
     return {
       statusCode: 302,
       headers: {
-        'Location': `${process.env.VITE_APP_URL || 'https://localhost:3000'}/?auth=success`,
+        'Location': `${appUrl}/?auth=success`,
         'Set-Cookie': `sb-access-token=${sessionData.session.access_token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600`
       },
       body: ''
@@ -92,10 +93,11 @@ const handler: Handler = async (event) => {
 
   } catch (error) {
     console.error('Google callback error:', error);
+    const appUrl = process.env.APP_URL || process.env.URL || 'http://localhost:3000';
     return {
       statusCode: 302,
       headers: {
-        'Location': `${process.env.VITE_APP_URL || 'https://localhost:3000'}/auth?error=google_auth_failed`
+        'Location': `${appUrl}/auth?error=google_auth_failed`
       },
       body: ''
     };

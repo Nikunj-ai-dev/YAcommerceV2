@@ -23,17 +23,17 @@ const handler: Handler = async (event) => {
     }
 
     const supabase = createClient(
-      process.env.VITE_SUPABASE_URL!,
+      process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Verify OTP
+    // Verify OTP using the actual temp_otp table from Supabase
     const hashedOtp = hashOTP(otp);
     const { data: otpRecord, error: otpError } = await supabase
-      .from('temp_otps')
+      .from('temp_otp')
       .select('*')
       .eq('identifier', email)
-      .eq('type', 'email')
+      .eq('identifier_type', 'email')
       .single();
 
     if (otpError || !otpRecord) {
@@ -42,27 +42,29 @@ const handler: Handler = async (event) => {
 
     // Check expiry
     if (new Date(otpRecord.expires_at) < new Date()) {
-      await supabase.from('temp_otps').delete().eq('identifier', email);
+      await supabase.from('temp_otp').delete().eq('identifier', email);
       return errorResponse('OTP has expired');
     }
 
-    // Check attempts
-    if (otpRecord.attempts >= 3) {
-      await supabase.from('temp_otps').delete().eq('identifier', email);
+    // Check attempts (using max_attempts from schema which defaults to 5)
+    const maxAttempts = otpRecord.max_attempts || 5;
+    if (otpRecord.attempts >= maxAttempts) {
+      await supabase.from('temp_otp').delete().eq('identifier', email);
       return errorResponse('Too many failed attempts');
     }
 
     // Verify hash
     if (otpRecord.otp_hash !== hashedOtp) {
       await supabase
-        .from('temp_otps')
+        .from('temp_otp')
         .update({ attempts: otpRecord.attempts + 1 })
         .eq('identifier', email);
       return errorResponse('Invalid OTP');
     }
 
-    // OTP verified - clean up
-    await supabase.from('temp_otps').delete().eq('identifier', email);
+    // OTP verified - mark as consumed and clean up
+    await supabase.from('temp_otp').update({ consumed: true }).eq('identifier', email);
+    await supabase.from('temp_otp').delete().eq('identifier', email);
 
     // Check if customer exists
     let { data: customer } = await supabase

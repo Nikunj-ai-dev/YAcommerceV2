@@ -254,7 +254,7 @@ Key tables:
 - **carts, cart_items** - Shopping cart
 - **customer_addresses** - Shipping addresses
 - **payments** - Payment records
-- **temp_otps** - Temporary OTP storage
+- **temp_otp** - Temporary OTP storage
 
 ---
 

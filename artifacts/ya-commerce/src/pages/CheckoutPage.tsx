@@ -186,13 +186,13 @@ export default function CheckoutPage() {
 
       const paymentRes = await apiFetch<{
         success: boolean;
-        razorpayOrderId: string;
+        orderId: string;
         amount: number;
         currency: string;
-        keyId: string;
+        key: string;
       }>("/api/payment/create-order", {
         method: "POST",
-        body: JSON.stringify({ orderId: order.id, amount: total, currency: "INR" }),
+        body: JSON.stringify({ orderId: order.id, amount: total, currency: "INR", customerId: customer.id }),
       });
 
       if (!paymentRes.success) throw new Error("Failed to create payment");
@@ -201,20 +201,20 @@ export default function CheckoutPage() {
       const RazorpayConstructor = win["Razorpay"] as new (opts: Record<string, unknown>) => { open: () => void };
 
       const rzp = new RazorpayConstructor({
-        key: paymentRes.keyId,
+        key: paymentRes.key,
         amount: Math.round(total * 100),
         currency: "INR",
         name: "YA Commerce",
         description: `Order ${order.order_number}`,
-        order_id: paymentRes.razorpayOrderId,
+        order_id: paymentRes.orderId,
         handler: async (response: Record<string, string>) => {
           try {
             await apiFetch("/api/payment/verify", {
               method: "POST",
               body: JSON.stringify({
-                razorpayOrderId: response["razorpay_order_id"],
-                razorpayPaymentId: response["razorpay_payment_id"],
-                razorpaySignature: response["razorpay_signature"],
+                razorpay_order_id: response["razorpay_order_id"],
+                razorpay_payment_id: response["razorpay_payment_id"],
+                razorpay_signature: response["razorpay_signature"],
                 orderId: order.id,
               }),
             });

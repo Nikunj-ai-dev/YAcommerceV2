@@ -260,7 +260,7 @@ See `DEPLOYMENT.md` for step-by-step guide.
 - **shipping_zones, shipping_methods** - Shipping config
 - **coupons, promotion_rules** - Discounts
 - **warehouses** - Fulfillment centers
-- **temp_otps** - OTP storage (new table)
+- **temp_otp** - OTP storage (already exists in Supabase)
 - ... and more
 
 ---

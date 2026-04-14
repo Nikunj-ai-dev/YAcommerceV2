@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 const rawPort = process.env.PORT || "3000";
 const port = Number(rawPort);
@@ -13,25 +12,55 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH || "/";
 
-export default defineConfig({
+// Load Replit plugins only when running in Replit environment
+async function getReplitPlugins() {
+  if (process.env.NODE_ENV === "production" || !process.env.REPL_ID) {
+    return [];
+  }
+
+  try {
+    const plugins = [];
+
+    // Try to load runtime error overlay
+    try {
+      const runtimeErrorOverlay = await import("@replit/vite-plugin-runtime-error-modal");
+      plugins.push(runtimeErrorOverlay.default());
+    } catch {
+      // Plugin not available, skip
+    }
+
+    // Try to load cartographer
+    try {
+      const cartographer = await import("@replit/vite-plugin-cartographer");
+      plugins.push(
+        cartographer.cartographer({
+          root: path.resolve(import.meta.dirname, ".."),
+        })
+      );
+    } catch {
+      // Plugin not available, skip
+    }
+
+    // Try to load dev banner
+    try {
+      const devBanner = await import("@replit/vite-plugin-dev-banner");
+      plugins.push(devBanner.devBanner());
+    } catch {
+      // Plugin not available, skip
+    }
+
+    return plugins;
+  } catch {
+    return [];
+  }
+}
+
+export default defineConfig(async () => ({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, ".."),
-            }),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
+    ...(await getReplitPlugins()),
   ],
   resolve: {
     alias: {
@@ -68,4 +97,9 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
   },
-});
+  // Ensure environment variables are properly exposed to the client
+  define: {
+    // These can be used as fallbacks if VITE_ prefixed vars aren't available
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+  },
+}));

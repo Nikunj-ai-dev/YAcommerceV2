@@ -1,22 +1,31 @@
 version: 1.0
+
+# AWS App Runner configuration for YA Commerce
+# This config is used when deploying via source repository (not ECR)
+# For ECR deployment, use the Dockerfile directly
+
 runtime: nodejs18
 
 build:
   commands:
     pre-build:
+      - echo "Node version:" && node --version
+      - echo "NPM version:" && npm --version
       - echo "Installing dependencies..."
-      - npm install
+      - npm ci
     build:
       - echo "Building application..."
       - npm run build
     post-build:
-      - echo "Build completed successfully"
+      - echo "Build completed"
+      - ls -la dist/
 
 run:
   runtime-version: 18
-  command: npm run serve
+  # Using npx serve for static file serving with SPA support
+  command: npx serve -s dist -l $PORT
   network:
-    port: 3000
+    port: 8080
     env: PORT
   env:
     - name: NODE_ENV

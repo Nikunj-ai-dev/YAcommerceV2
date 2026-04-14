@@ -1,0 +1,41 @@
+# Dependencies
+node_modules
+
+# Build output (will be regenerated)
+dist
+
+# Development files
+*.log
+*.md
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__
+coverage
+
+# Netlify functions (not needed for AWS App Runner static deployment)
+# Note: If using AWS Lambda for functions, deploy them separately
+netlify.toml
+
+# Documentation
+docs
+*.md
+LICENSE
+
+# Misc
+.DS_Store
+Thumbs.db

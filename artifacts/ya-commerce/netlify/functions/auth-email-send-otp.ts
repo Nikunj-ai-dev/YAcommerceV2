@@ -24,7 +24,7 @@ const handler: Handler = async (event) => {
     }
 
     const supabase = createClient(
-      process.env.VITE_SUPABASE_URL!,
+      process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
@@ -33,17 +33,21 @@ const handler: Handler = async (event) => {
     const hashedOtp = hashOTP(otp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Store OTP in database (create a temp_otps table or use customers table)
+    // Delete any existing OTP for this identifier first
+    await supabase.from('temp_otp').delete().eq('identifier', email);
+
+    // Store OTP in database using the actual temp_otp table from Supabase
     const { error: otpError } = await supabase
-      .from('temp_otps')
-      .upsert({
+      .from('temp_otp')
+      .insert({
         identifier: email,
+        identifier_type: 'email',
         otp_hash: hashedOtp,
+        purpose: 'login',
         expires_at: expiresAt.toISOString(),
-        type: 'email',
         attempts: 0,
         created_at: new Date().toISOString()
-      }, { onConflict: 'identifier' });
+      });
 
     if (otpError) {
       console.error('OTP storage error:', otpError);

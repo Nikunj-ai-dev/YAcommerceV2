@@ -108,15 +108,29 @@ Option A: Source Code Deployment
 - App Runner auto-detects `apprunner.yaml`
 - Configure environment variables in console
 
-Option B: Docker Deployment
+Option B: Docker/ECR Deployment (Recommended)
 ```bash
-# Build and push to ECR
-aws ecr create-repository --repository-name ya-commerce
-docker build -t ya-commerce .
+# 1. Create ECR repository (one-time)
+aws ecr create-repository --repository-name ya-commerce --region us-east-1
+
+# 2. Get ECR login
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+# 3. Build with build args for environment variables
+docker build \
+  --build-arg VITE_SUPABASE_URL="your-supabase-url" \
+  --build-arg VITE_SUPABASE_ANON_KEY="your-anon-key" \
+  --build-arg VITE_RAZORPAY_KEY_ID="your-razorpay-key" \
+  -t ya-commerce .
+
+# 4. Tag and push
 docker tag ya-commerce:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/ya-commerce:latest
-aws ecr get-login-password | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
 docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/ya-commerce:latest
+
+# 5. Create App Runner service from ECR image in AWS Console or CLI
 ```
+
+**Important:** The frontend environment variables (VITE_* prefix) need to be passed at build time since they get bundled into the JavaScript. Runtime-only env vars should use the non-VITE prefix.
 
 3. **Create App Runner Service**
 ```bash
@@ -233,7 +247,7 @@ Key tables:
 - `returns` - Return management
 - `product_reviews` - Product reviews
 - `support_tickets` - Customer support
-- `temp_otps` - Temporary OTP storage
+- `temp_otp` - Temporary OTP storage
 
 ---
 
